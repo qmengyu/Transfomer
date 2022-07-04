@@ -1,14 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# # 数据构建
-
-# ## 常用
-
-# In[ ]:
-
-
-# 数据构建
 import math
 import torch
 import numpy as np
@@ -16,81 +5,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as Data
 
-device = 'cpu'
-# device = 'cuda'
-
-# transformer epochs
-epochs = 100
-# epochs = 1000
-
-# S: decoding input 开始
-# E: decoding output 结束
-# P: padding 填充
-sentences = [
-    # 德语和英语的单词个数不要求相同
-    # enc_input                dec_input           dec_output
-    ['ich mochte ein bier P', 'S i want a beer .', 'i want a beer . E'],
-    ['ich mochte ein cola P', 'S i want a coke .', 'i want a coke . E']
-]
-
-# Padding Should be Zero  填充词库为 0
-src_vocab = {'P': 0, 'ich': 1, 'mochte': 2, 'ein': 3, 'bier': 4, 'cola': 5}
-src_idx2word = {i: w for i, w in enumerate(src_vocab)}
-# print(src_idx2word)    {0: 'P', 1: 'ich', 2: 'mochte', 3: 'ein', 4: 'bier', 5: 'cola'}
-src_vocab_size = len(src_vocab)
-
-tgt_vocab = {'P': 0, 'i': 1, 'want': 2, 'a': 3, 'beer': 4, 'coke': 5, 'S': 6, 'E': 7, '.': 8}
-idx2word = {i: w for i, w in enumerate(tgt_vocab)}
-tgt_vocab_size = len(tgt_vocab)
-
-src_len = 5  #   encoder 输入句子最大长度
-tgt_len = 6  #  decoder 输入/输出句子最大长度
 
 
 # ==============================================================================================
-# 数据构建
-
-enc_inputs, dec_inputs, dec_outputs = [], [], []
-for i in range(len(sentences)):
-    enc_input = [[src_vocab[n] for n in sentences[i][0].split()]]  
-    dec_input = [[tgt_vocab[n] for n in sentences[i][1].split()]]  
-    dec_output = [[tgt_vocab[n] for n in sentences[i][2].split()]]  
-
-    enc_inputs.extend(enc_input)
-    dec_inputs.extend(dec_input)
-    dec_outputs.extend(dec_output)
-
-enc_inputs = torch.LongTensor(enc_inputs)  # [[1, 2, 3, 4, 0], [1, 2, 3, 5, 0]]
-dec_inputs = torch.LongTensor(dec_inputs)  # [[6, 1, 2, 3, 4, 8], [6, 1, 2, 3, 5, 8]]
-dec_outputs = torch.LongTensor(dec_outputs) # [[1, 2, 3, 4, 8, 7], [1, 2, 3, 5, 8, 7]]
-
-class MyDataSet(Data.Dataset):
-    """自定义DataLoader"""
-
-    def __init__(self, enc_inputs, dec_inputs, dec_outputs):
-        super(MyDataSet, self).__init__()
-        self.enc_inputs = enc_inputs
-        self.dec_inputs = dec_inputs
-        self.dec_outputs = dec_outputs
-
-    def __len__(self):
-        return self.enc_inputs.shape[0]
-
-    def __getitem__(self, idx):
-        return self.enc_inputs[idx], self.dec_inputs[idx], self.dec_outputs[idx]
-
-
-loader = Data.DataLoader(MyDataSet(enc_inputs, dec_inputs, dec_outputs), 2, True)
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
 
 # Transformer Parameters
 d_model = 512  # Embedding Size（token embedding和position编码的维度）
@@ -98,9 +15,6 @@ d_ff = 2048  # FeedForward dimension (两次线性层中的隐藏层 512->2048->
 d_k = d_v = 64  # dimension of K(=Q), V（Q和K的维度需要相同，这里为了方便让K=V）
 n_layers = 6  # number of Encoder of Decoder Layer（Block的个数）
 n_heads = 8  # number of heads in Multi-Head Attention（有几套头）
-
-
-# In[ ]:
 
 
 class PositionalEncoding(nn.Module):
@@ -123,10 +37,7 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
 
-
-# In[ ]:
-
-
+    
 def get_attn_subsequence_mask(seq):
     """
     seq: [batch_size, tgt_len]
@@ -136,9 +47,6 @@ def get_attn_subsequence_mask(seq):
     subsequence_mask = np.triu(np.ones(attn_shape), k=1)  # 生成一个上三角矩阵
     subsequence_mask = torch.from_numpy(subsequence_mask).byte()
     return subsequence_mask  # [batch_size, tgt_len, tgt_len]
-
-
-# In[ ]:
 
 
 # Transformer模型
@@ -225,9 +133,6 @@ class MultiHeadAttention(nn.Module):
         # 再做一个projection
         output = self.fc(context)  # [batch_size, len_q, d_model]
         return nn.LayerNorm(d_model).to(device)(output + residual), attn
-
-
-# In[ ]:
 
 
 # Pytorch中的Linear只会对最后一维操作，所以正好是我们希望的每个位置用同一个全连接网络
@@ -359,9 +264,6 @@ class Decoder(nn.Module):
         return dec_outputs, dec_self_attns, dec_enc_attns
 
 
-# In[ ]:
-
-
 class Transformer(nn.Module):
     def __init__(self):
         super(Transformer, self).__init__()
@@ -385,34 +287,9 @@ class Transformer(nn.Module):
         return dec_logits.view(-1, dec_logits.size(-1)), enc_self_attns, dec_self_attns, dec_enc_attns
 
 
-# In[ ]:
-
 
 model = Transformer().to(device)
-# 这里的损失函数里面设置了一个参数 ignore_index=0，因为 "pad" 这个单词的索引为 0，这样设置以后，就不会计算 "pad" 的损失（因为本来 "pad" 也没有意义，不需要计算）
-criterion = nn.CrossEntropyLoss(ignore_index=0)
-optimizer = optim.SGD(model.parameters(), lr=1e-3, momentum=0.99)  # 用adam的话效果不好
 
-# ====================================================================================================
-for epoch in range(epochs):
-    for enc_inputs, dec_inputs, dec_outputs in loader:
-        """
-        enc_inputs: [batch_size, src_len]
-        dec_inputs: [batch_size, tgt_len]
-        dec_outputs: [batch_size, tgt_len]
-        """
-        enc_inputs, dec_inputs, dec_outputs = enc_inputs.to(device), dec_inputs.to(device), dec_outputs.to(device)
-        # outputs: [batch_size * tgt_len, tgt_vocab_size]
-        outputs, enc_self_attns, dec_self_attns, dec_enc_attns = model(enc_inputs, dec_inputs)
-        loss = criterion(outputs, dec_outputs.view(-1))  # dec_outputs.view(-1):[batch_size * tgt_len ]
-        print('Epoch:', '%04d' % (epoch + 1), 'loss =', '{:.6f}'.format(loss))
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-
-# In[ ]:
 
 
 def greedy_decoder(model, enc_input, start_symbol):
@@ -442,23 +319,6 @@ def greedy_decoder(model, enc_input, start_symbol):
     #     -1)
     greedy_dec_predict = dec_input[:, 1:]
     return greedy_dec_predict
-
-
-# ==========================================================================================
-# 预测阶段
-enc_inputs, _, _ = next(iter(loader))
-for i in range(len(enc_inputs)):
-    greedy_dec_predict = greedy_decoder(model, enc_inputs[i].view(1, -1).to(device), start_symbol=tgt_vocab["S"])
-    print(enc_inputs[i], '->', greedy_dec_predict.squeeze())
-    print([src_idx2word[t.item()] for t in enc_inputs[i]], '->',
-          [idx2word[n.item()] for n in greedy_dec_predict.squeeze()])
-
-
-# ## 详解
-
-# 
-
-# In[ ]:
 
 
 
